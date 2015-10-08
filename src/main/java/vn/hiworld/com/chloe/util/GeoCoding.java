@@ -1,9 +1,16 @@
 package vn.hiworld.com.chloe.util;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -19,7 +26,7 @@ import se.walkercrou.places.Place;
 
 public class GeoCoding {
 	
-	
+	private final static String GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json?address=%s=%s";
 	private static GeoCoding geoCodingContext = null;
 	private static GeoApiContext geoContext = null;
 	private static String APIKEY = "AIzaSyDTGMoAL8ve-u4zCe3M8V1nEQGQCVV3YzU";
@@ -57,7 +64,9 @@ public class GeoCoding {
 		place = new GooglePlaces(APIKEY);
 	}
 	
-	
+	public static GeoCoding createGeoCoding(){
+		return createGeoCoding(APIKEY);
+	}
 	
 	public static GeoCoding createGeoCoding(String ApiKey){
 		if(geoCodingContext == null){
@@ -82,6 +91,18 @@ public class GeoCoding {
 		APIKEY = ApiKey;
 		geoContext.setApiKey(APIKEY);
 		place.setApiKey(APIKEY);
+	}
+	
+	public String search(final String address) throws IOException{
+		URL uri = new URL(String.format(GEOCODING_URL,URLEncoder.encode(address, "UTF-8"),APIKEY));
+		URLConnection connection = uri.openConnection();
+		try(BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))){
+			StringBuffer json = new StringBuffer();
+			in.lines().forEach( x -> {
+				json.append(x);
+			});
+			return json.toString();
+		}
 	}
 	
 	public ImmutableMap<String, String> getAddressInformationMin(final String address){

@@ -3,6 +3,8 @@ package vn.hiworld.com.chloe.service;
 
 import java.net.URI;
 
+import com.google.common.base.Preconditions;
+
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
@@ -18,22 +20,52 @@ public class MongoChloeClient{
 	private static String USERNAME = "";
 	private static String PASSWORD = "";
 	private static String DATABASE_NAME = "google_service";
+	private static final String COLLECTION_NAME = "geo";
 	private MongoClient mongoClient = null;
 	
 	public MongoChloeClient(Vertx vertx,String path,String dbname){
+		Preconditions.checkNotNull(vertx);
+		Preconditions.checkNotNull(path);
+		Preconditions.checkNotNull(dbname);
+
 		this.DATABASE_NAME = dbname;
 //		URI uri = new URI(path);
 //		String username = uri.getUserInfo()
 		JsonObject config = Vertx.currentContext().config();
 		JsonObject mongoconfig = new JsonObject()
 		        .put(CONN, path)
-		        .put(DATABASE_NAME, dbname);
+		        .put(DB_NAME, dbname);
 		mongoClient = MongoClient.createShared(vertx, mongoconfig);
 	}
 	
 	public MongoClient getClient(){
 		return mongoClient;
 	}
+	
+	public void insert(String col_name, JsonObject data){
+		mongoClient.insert(col_name, data, res -> {
+			
+		});
+	}
+	
+	public void find(){
+		JsonObject query = new JsonObject();
+//		query.put("url", "{$exists:true}");
+		System.out.println("begin");
+		mongoClient.find("crawler.trangvangvietnam.com", query, res -> {
+			System.out.println(res.result().size());
+			if (res.succeeded()){
+			    for (JsonObject json : res.result()) {
+			      System.out.println(json.encodePrettily());
+			      break;
+			    }
+
+			  } else {
+			    res.cause().printStackTrace();
+			  }
+		});
+	}
+	
 	
 //	public static void main(String[] args) {
 	
