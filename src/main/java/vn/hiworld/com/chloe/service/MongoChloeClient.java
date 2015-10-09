@@ -2,18 +2,31 @@ package vn.hiworld.com.chloe.service;
 
 
 import java.net.URI;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import com.google.common.base.Preconditions;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
 
+import io.netty.handler.codec.http.HttpResponse;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.mongo.FindOptions;
 import io.vertx.ext.mongo.MongoClient;
+import io.vertx.ext.web.RoutingContext;
 import vn.hiworld.com.chloe.util.Runner;
 
 public class MongoChloeClient{
 
-	
+//    private static final ExecutorService threadpool = Executors.newFixedThreadPool(3);
 	private static final String DB_NAME = "db_name";
 	private static final String CONN = "connection_string";
 	private static String URL = "mongo://localhost:27017";
@@ -22,6 +35,13 @@ public class MongoChloeClient{
 	private static String DATABASE_NAME = "google_service";
 	private static final String COLLECTION_NAME = "geo";
 	private MongoClient mongoClient = null;
+	private Vertx vertx = null;
+	private final ILogger _log = Logger.getLogger(MongoChloeClient.class); 
+	
+	
+	public MongoChloeClient(Vertx vertx){
+		this(vertx,URL,DB_NAME);
+	}
 	
 	public MongoChloeClient(Vertx vertx,String path,String dbname){
 		Preconditions.checkNotNull(vertx);
@@ -29,6 +49,7 @@ public class MongoChloeClient{
 		Preconditions.checkNotNull(dbname);
 
 		this.DATABASE_NAME = dbname;
+		this.vertx = vertx;
 //		URI uri = new URI(path);
 //		String username = uri.getUserInfo()
 		JsonObject config = Vertx.currentContext().config();
@@ -42,75 +63,67 @@ public class MongoChloeClient{
 		return mongoClient;
 	}
 	
-	public void insert(String col_name, JsonObject data){
+	public void insert(JsonObject data,RoutingContext rc){
+		insert(COLLECTION_NAME,data, rc);
+	}
+	
+	public void insert(String col_name, JsonObject data,RoutingContext rc){
+		HttpServerResponse response = rc.response().putHeader("content-type", "application/json");
 		mongoClient.insert(col_name, data, res -> {
-			
+			if(res.succeeded()){
+				response.end("{result:OK}");
+			}
+			else{
+//				res.cause().printStackTrace();
+				response.end("{result:ERROR}");
+			}
 		});
 	}
 	
-	public void find(){
-		JsonObject query = new JsonObject();
-//		query.put("url", "{$exists:true}");
-		System.out.println("begin");
-		mongoClient.find("crawler.trangvangvietnam.com", query, res -> {
-			System.out.println(res.result().size());
+	public void update(String col_name, JsonObject query,JsonObject data){
+		mongoClient.update(col_name, query , data, res -> {
+			if(res.succeeded()){
+				_log.info("update data success");
+			}
+			else{
+				res.cause().printStackTrace();
+			}
+		});
+	}
+	
+	public MongoClient findAll(RoutingContext rc) throws Exception{
+		return find(COLLECTION_NAME, new JsonObject(),rc);
+	}
+	
+	public MongoClient findAll(RoutingContext rc,int limit) throws Exception{
+		return find(COLLECTION_NAME, new JsonObject(),new FindOptions().setLimit(limit),rc);
+	}
+	
+	public MongoClient findAll(String col_name,RoutingContext rc,int limit) throws Exception{
+		return find(col_name, new JsonObject(),new FindOptions().setLimit(limit),rc);
+	}
+	
+	public MongoClient find(JsonObject query, RoutingContext rc) throws Exception{
+		return find(COLLECTION_NAME, query,rc);
+	}
+	
+	public MongoClient find(String col_name, JsonObject query, RoutingContext rc) throws Exception{
+		return find(col_name, query,new FindOptions(),rc);
+	}
+	
+	public MongoClient find(String col_name, JsonObject query,FindOptions optinal, RoutingContext rc) throws Exception{
+		return mongoClient.findWithOptions(col_name, query,optinal ,res -> {
+			HttpServerResponse response = rc.response().putHeader("content-type", "application/json");
 			if (res.succeeded()){
-			    for (JsonObject json : res.result()) {
-			      System.out.println(json.encodePrettily());
-			      break;
-			    }
-
-			  } else {
-			    res.cause().printStackTrace();
-			  }
+				response.end(res.result().stream().map( x -> x.encode()).reduce( (x,y) -> x + y ).get());
+			} else {
+				response.end("{result:ERROR}");
+//			    res.cause().printStackTrace();
+			}
 		});
 	}
 	
-	
-//	public static void main(String[] args) {
-	
-//	    Runner.runExample(MongoChloeClient.class);
-//	  }
-//
-//	  @Override
-//	  public void start() throws Exception {String
-//
-//	    JsonObject config = Vertx.currentContext().config();
-//
-//	    String uri = config.getString("mongo_uri");
-//	    if (uri == null) {
-//	      uri = "mongodb://localhost:27017";
-//	    }
-//	    String db = config.getString("mongo_db");
-//	    if (db == null) {
-//	      db = "test";
-//	    }
-//
-//	    JsonObject mongoconfig = new JsonObject()
-//	        .put("connection_string", uri)
-//	        .put("db_name", db);
-//
-//	    MongoClient mongoClient = MongoClient.createShared(vertx, mongoconfig);
-//
-//	    JsonObject product1 = new JsonObject().put("itemId", "12345").put("name", "Cooler").put("price", "100.0");
-//
-//	    mongoClient.save("products", product1, id -> {
-//	      System.out.println("Inserted id: " + id.result());
-//
-//	      mongoClient.find("products", new JsonObject().put("itemId", "12345"), res -> {
-//	        System.out.println("Name is " + res.result().get(0).getString("name"));
-//
-//	        mongoClient.remove("products", new JsonObject().put("itemId", "12345"), rs -> {
-//	          if (rs.succeeded()) {
-//	            System.out.println("Product removed ");
-//	          }
-//	        });
-//
-//	      });
-//
-//	    });
-//
-//	  }
+
 
   
 }
